@@ -1,69 +1,54 @@
-import mysql.connector
+import sqlite3
 import streamlit as st
 import requests
 import random
 import datetime
 import bcrypt
-from mysql.connector import Error
+from sqlite3 import Error
 
 INSTANCE_ID = "instance:116840"
 TOKEN = "ke9cie56ll57nyo6"
 API_URL = "https://api.ultramsg.com/instance116840/"
 
-
 def get_db_connection():
     try:
-        conn = mysql.connector.connect(
-            host=st.secrets["mysql"]["host"],
-            user=st.secrets["mysql"]["user"],
-            password=st.secrets["mysql"]["password"],
-            database=st.secrets["mysql"]["database"],
-            port=st.secrets["mysql"].get("port", 3306)
-        )
+        conn = sqlite3.connect('work.db')
+        conn.row_factory = sqlite3.Row
         return conn
     except Error as e:
-        st.error(f"Error connecting to the database: {e}")
-        return None
+        st.error(f"Database connection failed: {e}")
+        st.stop()
 
 def initialize_database():
-    db = get_db_connection()
-    if db is None:
-        return
-    cursor = db.cursor()
+    conn = get_db_connection()
     try:
-        cursor.execute("SHOW TABLES LIKE 'users'")
-        if not cursor.fetchone():
-            cursor.execute("""
-                CREATE TABLE users (
-                    name VARCHAR(45),
-                    phone VARCHAR(10) PRIMARY KEY,
-                    address VARCHAR(90),
-                    area VARCHAR(6),
-                    password VARCHAR(255)
-                )
-            """)
-            db.commit()
-        cursor.execute("SHOW TABLES LIKE 'help_requests'")
-        if not cursor.fetchone():
-            cursor.execute("""
-                CREATE TABLE help_requests (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    name VARCHAR(45),
-                    phone VARCHAR(10),
-                    address VARCHAR(90),
-                    area VARCHAR(6),
-                    request TEXT,
-                    time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            db.commit()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                name TEXT,
+                phone TEXT PRIMARY KEY,
+                address TEXT,
+                area TEXT,
+                password TEXT
+            )
+        """)
+        
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS help_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT,
+                phone TEXT,
+                address TEXT,
+                area TEXT,
+                request TEXT,
+                time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
     except Error as e:
         st.error(f"Database initialization failed: {e}")
         st.stop()
     finally:
-        cursor.close()
-        db.close()
-
+        conn.close()
 
 initialize_database()
 
@@ -147,9 +132,10 @@ def register_page():
                 for error in errors:
                     st.error(error)
             else:
-                db, cursor = get_db_connection()
+                conn = get_db_connection()
                 try:
-                    cursor.execute("SELECT phone FROM users WHERE phone = %s", (phone,))
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT phone FROM users WHERE phone = ?", (phone,))
                     if cursor.fetchone():
                         st.error("This phone number is already registered")
                     else:
@@ -166,8 +152,7 @@ def register_page():
                             }
                             st.session_state.registration_step = "verify_otp"
                 finally:
-                    cursor.close()
-                    db.close()
+                    conn.close()
 
     if st.session_state.get("registration_step") == "verify_otp":
         with st.form("otp_verification"):
@@ -178,11 +163,11 @@ def register_page():
                     st.session_state.registration_data["otp"],
                     st.session_state.registration_data["generation_time"]
                 ):
-                    db, cursor = get_db_connection()
+                    conn = get_db_connection()
                     try:
                         hashed_password = hash_password(st.session_state.registration_data["password"])
-                        cursor.execute(
-                            "INSERT INTO users (name, phone, address, area, password) VALUES (%s, %s, %s, %s, %s)",
+                        conn.execute(
+                            "INSERT INTO users (name, phone, address, area, password) VALUES (?, ?, ?, ?, ?)",
                             (
                                 st.session_state.registration_data["name"],
                                 st.session_state.registration_data["phone"],
@@ -191,7 +176,7 @@ def register_page():
                                 hashed_password
                             )
                         )
-                        db.commit()
+                        conn.commit()
                         st.success("Registration successful! Please login.")
                         del st.session_state.registration_data
                         del st.session_state.registration_step
@@ -200,8 +185,7 @@ def register_page():
                     except Error as e:
                         st.error(f"Registration failed: {e}")
                     finally:
-                        cursor.close()
-                        db.close()
+                        conn.close()
                 else:
                     st.error("Invalid OTP or OTP has expired")
 
@@ -214,37 +198,38 @@ def login_page():
 
         if st.form_submit_button("Login"):
             if len(phone) == 10 and phone.isdigit():
-                db, cursor = get_db_connection()
+                conn = get_db_connection()
                 try:
+                    cursor = conn.cursor()
                     cursor.execute(
-                        "SELECT phone, password FROM users WHERE phone = %s",
+                        "SELECT phone, password FROM users WHERE phone = ?",
                         (phone,)
                     )
                     user = cursor.fetchone()
 
                     if user:
-                        if check_password(password, user[1]):
+                        if check_password(password, user["password"]):
                             st.session_state.logged_in = True
                             st.session_state.user_phone = phone
 
                             cursor.execute(
-                                "SELECT name, address FROM users WHERE phone = %s",
+                                "SELECT name, address FROM users WHERE phone = ?",
                                 (phone,)
                             )
                             user_info = cursor.fetchone()
                             if user_info:
-                                st.session_state.user_name = user_info[0]
-                                st.session_state.user_address = user_info[1]
+                                st.session_state.user_name = user_info["name"]
+                                st.session_state.user_address = user_info["address"]
 
                             st.session_state.page = "dashboard"
                             st.rerun()
+                        else:
+                            st.error("Incorrect password")
                     else:
-                        st.error("User not found\nPlease Complete registration")
+                        st.error("User not found\nPlease complete registration")
                 finally:
-                    cursor.close()
-                    db.close()
+                    conn.close()
         
-                            
     st.write("Don't have an account?")
     if st.button("Register"):
         st.session_state.page = "register"
@@ -253,22 +238,22 @@ def login_page():
 def request_help():
     st.title("Request Help")
 
-    db, cursor = get_db_connection()
+    conn = get_db_connection()
     try:
+        cursor = conn.cursor()
         cursor.execute(
-            "SELECT name, address, area FROM users WHERE phone = %s",
+            "SELECT name, address, area FROM users WHERE phone = ?",
             (st.session_state.user_phone,)
         )
         user_data = cursor.fetchone()
     finally:
-        cursor.close()
-        db.close()
+        conn.close()
 
     if not user_data:
         st.error("User data not found")
         return
 
-    name, address, area = user_data
+    name, address, area = user_data["name"], user_data["address"], user_data["area"]
 
     with st.form("help_request"):
         request_text = st.text_area("How can we help you?")
@@ -276,16 +261,17 @@ def request_help():
             if not request_text.strip():
                 st.error("Please enter your request")
             else:
-                db, cursor = get_db_connection()
+                conn = get_db_connection()
                 try:
-                    cursor.execute(
-                        "INSERT INTO help_requests (name, phone, address, area, request) VALUES (%s, %s, %s, %s, %s)",
+                    conn.execute(
+                        "INSERT INTO help_requests (name, phone, address, area, request) VALUES (?, ?, ?, ?, ?)",
                         (name, st.session_state.user_phone, address, area, request_text)
                     )
-                    db.commit()
+                    conn.commit()
 
+                    cursor = conn.cursor()
                     cursor.execute(
-                        "SELECT phone FROM users WHERE area = %s AND phone != %s",
+                        "SELECT phone FROM users WHERE area = ? AND phone != ?",
                         (area, st.session_state.user_phone)
                     )
                     neighbors = cursor.fetchall()
@@ -298,70 +284,60 @@ def request_help():
                     )
 
                     for neighbor in neighbors:
-                        send_otp(neighbor[0], message, silent=True)
+                        send_otp(neighbor["phone"], message, silent=True)
 
                     st.success("Your request has been submitted and neighbors have been notified!")
                 finally:
-                    cursor.close()
-                    db.close()
-
-def backgroundimg():
-    st.markdown(
-         f"""
-         <style>
-         .stApp {{
-             background-image: url("data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBwgHBgkIBwgKCgkLDRYPDQwMDRsUFRAWIB0iIiAdHx8kKDQsJCYxJx8fLT0tMTU3Ojo6Iys/RD84QzQ5OjcBCgoKDQwNGg8PGjclHyU3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3N//AABEIAJQAywMBIgACEQEDEQH/xAAaAAADAQEBAQAAAAAAAAAAAAAAAQIDBAUH/8QAJRAAAgIDAAMAAgEFAAAAAAAAAAECEQMSIQQxQRNRYQUiMoGR/8QAGAEAAwEBAAAAAAAAAAAAAAAAAAECAwT/xAAeEQEBAQEAAwEAAwAAAAAAAAAAARECAxIhQQQTMf/aAAwDAQACEQMRAD8A+LRLRCLNWNWi0ZopMGdWUiEUi9TWiLiZotOhs60j7N4HMnTRrGXSoz6jeTNId6vZzSbdUa+PJ3bKjOz47MTrhupdOSM6ZrCfTWVzdctJuwi0uBFq+mU8mkml6Y9TJvx63hqGm0nUvlHdgT3bUtoHi4MkqVujqh5Ljer+Fysepld2bJBO3Tr4ed5coZHcfRlkyN11/wAktuSpcQ9Oc/qGtY8+nLky6t0bZ56cv0eblm230y7rp8XGlKe0m2YyG2RJmNrskRIgcrJ6RWsciKRCZRm6KpFGZSYJsaIuLM0xphEWNh2ZKRakVqLFtmiZjZUWPU2OnGzdNVRywZujSVj1HRCmOUqijFS17ZO9/StZerpWTgqcu+zGL/Z1+O02kOfU9T1mqxW+HTpJqkbLx4JKSZUfvDaTHJ15NvxjJRjjqunJlzanR5MqWv08zOyerjXxc7/qM2VyttnLKRU5GLfTn6rv45xb6SxbCcidXhS4RsOTM7E0jji+l2ZjTM3TY0TCyLGmGljRMLEulajSakUmyKNIIE1UZd6aJkUUimdaRkbQyP0+/wCjnQblai866ZTCMzFNsqPWPUerdOzu8X5+zkwY3kklE9Tx/Gca24jXiWuXzdSTHo+FilljTdJHZl8L8HjfltPb0jgh5MPHap3RpL+rzyx0WutV6N9jh9d+44c2KX45ZJOjx8r77PU8zLKdpf8ADx8930x8ldv8eXPrPIYtFtiZhXbPiGItoVApDRk07N2Tf8CVK84BhVmTqCLiiaLQ4mqSLolFJjRRRSdEumS7Asa7FKVGNjVgWNlIpJGKfw0gVEWN4JFOLg1z2RHhtGSf+RTKu7wnotvp2S8tJcZ5DypRpMn8to1neObrw+12u3Jlc5XYLJojlWTgPJ/axex/1/jeWd/s5sslLv0ycyXMm9NefHhtConYHJEtMDYibE5CVhi4FisDx547JsLMtdirspEWNMCsaoZEWOxs8U2w2E+iVDDWNGkWjGLLTCJsbqMW0zZ6qJhj6rHKTqimNltOTd8Ki2zOMum8Gl1jhX4jI3Fqydw8h7O0YWK1XM2OpTHuc0ZFbBo9GjkTfSNrFY9PGlkSYrBi0SG2KxCsFYpisViFaJHDYyR2ZOowFYx6FJj2IANTjRSHsZopMCxomaQ78M4mkXRURXTB0qJkZqRd8KlZZ9JM0U+GL9gmGjGvszmv0hpich2iTEXQ7JkKyV4ux2Z7BYDGlisiwsNGLslsVisDw0wsViA3MIaGZtiSGCG6AEOhIYQjEMQyXFmlmKZd8HKmxopUUpmNhbQ9L1atjTMth7BpY2TE2ZqYxlgbJsJEWJUirGmQAHjSwszsLDRi7QrIsVhoxpYWZ2FgeMxoQELVYWSABQCsLAHY7EAAxpkjsZKsdk+wTGWBhYWAA0y1IyCxaLGkpEB7AYwAAAYCg9DsCKgorhSSAtZ0FGtIKQ8GuYAAzaAAACAAAAwsQDCgEAAw9AAA0MkA0sU6JAAAsLExoDAWAD0HYybARYqykZ2NMeljWx2ZKXB7FaWMgADNoAAAAAAAgAAMAAAAB2AAAMAAAAARAAAZgkAAAaAABgAAAMAAP//Z");
-             background-attachment: fixed;
-             background-size: cover;
-             background-position: center;
-         }}
-         </style>
-         """,
-         unsafe_allow_html=True
-     )
+                    conn.close()
 
 def fulfill_requests():
     st.title("Available Requests")
 
-    db, cursor = get_db_connection()
+    conn = get_db_connection()
     try:
+        cursor = conn.cursor()
         cursor.execute(
-            "DELETE FROM help_requests WHERE time < NOW() - INTERVAL 12 HOUR"
+            "DELETE FROM help_requests WHERE time < datetime('now', '-12 hours')"
         )
-        db.commit()
+        conn.commit()
 
         cursor.execute(
-            "SELECT area FROM users WHERE phone = %s",
+            "SELECT area FROM users WHERE phone = ?",
             (st.session_state.user_phone,)
         )
         user_area = cursor.fetchone()
     finally:
-        cursor.close()
-        db.close()
+        conn.close()
 
     if not user_area:
         st.error("Could not determine your area")
         return
 
-    area = user_area[0]
+    area = user_area["area"]
 
-    db, cursor = get_db_connection()
+    conn = get_db_connection()
     try:
+        cursor = conn.cursor()
         cursor.execute(
-            "SELECT id, name, phone, address, request, time FROM help_requests WHERE area = %s ORDER BY time DESC",
+            "SELECT id, name, phone, address, request, time FROM help_requests WHERE area = ? ORDER BY time DESC",
             (area,)
         )
         help_requests_list = cursor.fetchall()
     finally:
-        cursor.close()
-        db.close()
+        conn.close()
 
     if not help_requests_list:
         st.info("No help requests in your area currently")
         return
 
     for req in help_requests_list:
-        req_id, name, phone, address, request_text, request_time = req
+        req_id = req["id"]
+        name = req["name"]
+        phone = req["phone"]
+        address = req["address"]
+        request_text = req["request"]
+        request_time = req["time"]
+        
         with st.expander(f"Request from {name} at {request_time}"):
             st.write(f"**Address:** {address}")
             st.write(f"**Request:** {request_text}")
@@ -396,20 +372,20 @@ def fulfill_requests():
 def account_info():
     st.title("👤 Account Information")
 
-    db, cursor = get_db_connection()
+    conn = get_db_connection()
     try:
+        cursor = conn.cursor()
         cursor.execute(
-            "SELECT name, phone, address, area FROM users WHERE phone = %s",
+            "SELECT name, phone, address, area FROM users WHERE phone = ?",
             (st.session_state.user_phone,)
         )
         user_info = cursor.fetchone()
     finally:
-        cursor.close()
-        db.close()
+        conn.close()
 
     if user_info:
         with st.container():
-            st.markdown("""
+            st.markdown(f"""
                 <div style="
                     background-color: #ffffff10;
                     padding: 25px;
@@ -417,15 +393,14 @@ def account_info():
                     box-shadow: 0px 0px 20px rgba(0,0,0,0.2);
                     color: white;
                 ">
-                    <h2 style="text-align:center;">👤 {}</h2>
-                    <p><strong>📱 Phone:</strong> {}</p>
-                    <p><strong>🏠 Address:</strong> {}</p>
-                    <p><strong>📍 Area Code:</strong> {}</p>
+                    <h2 style="text-align:center;">👤 {user_info['name']}</h2>
+                    <p><strong>📱 Phone:</strong> {user_info['phone']}</p>
+                    <p><strong>🏠 Address:</strong> {user_info['address']}</p>
+                    <p><strong>📍 Area Code:</strong> {user_info['area']}</p>
                 </div>
-            """.format(user_info[0], user_info[1], user_info[2], user_info[3]), unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
             st.markdown("---")
-
 
             if st.button("❌ Delete My Account", use_container_width=True):
                 otp, generation_time = generate_otp()
@@ -447,11 +422,11 @@ def account_info():
                         st.session_state.delete_data["otp"],
                         st.session_state.delete_data["generation_time"]
                     ):
-                        db, cursor = get_db_connection()
+                        conn = get_db_connection()
                         try:
-                            cursor.execute("DELETE FROM users WHERE phone = %s", (st.session_state.user_phone,))
-                            cursor.execute("DELETE FROM help_requests WHERE phone = %s", (st.session_state.user_phone,))
-                            db.commit()
+                            conn.execute("DELETE FROM users WHERE phone = ?", (st.session_state.user_phone,))
+                            conn.execute("DELETE FROM help_requests WHERE phone = ?", (st.session_state.user_phone,))
+                            conn.commit()
                             st.success("Account deleted successfully")
                             st.session_state.logged_in = False
                             del st.session_state.user_phone
@@ -460,8 +435,7 @@ def account_info():
                             st.session_state.page = "login"
                             st.rerun()
                         finally:
-                            cursor.close()
-                            db.close()
+                            conn.close()
                     else:
                         st.error("Invalid OTP or OTP has expired")
             with col2:
@@ -470,9 +444,22 @@ def account_info():
                     del st.session_state.delete_step
                     st.rerun()
 
+def backgroundimg():
+    st.markdown(
+         f"""
+         <style>
+         .stApp {{
+             background-image: url("data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBwgHBgkIBwgKCgkLDRYPDQwMDRsUFRAWIB0iIiAdHx8kKDQsJCYxJx8fLT0tMTU3Ojo6Iys/RD84QzQ5OjcBCgoKDQwNGg8PGjclHyU3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3N//AABEIAJQAywMBIgACEQEDEQH/xAAaAAADAQEBAQAAAAAAAAAAAAAAAQIDBAUH/8QAJRAAAgIDAAMAAgEFAAAAAAAAAAECEQMSIQQxQRNRYQUiMoGR/8QAGAEAAwEBAAAAAAAAAAAAAAAAAAECAwT/xAAeEQEBAQEAAwEAAwAAAAAAAAAAARECAxIhQQQTMf/aAAwDAQACEQMRAD8A+LRLRCLNWNWi0ZopMGdWUiEUi9TWiLiZotOhs60j7N4HMnTRrGXSoz6jeTNId6vZzSbdUa+PJ3bKjOz47MTrhupdOSM6ZrCfTWVzdctJuwi0uBFqemU8mkml6Y9TJvx63hqGm0nUvlHdgT3bUtoHi4MkqVujqh5Ljer+Fysepld2bJBO3Tr4ed5coZHcfRlkyN11/wAktuSpcQ9Oc/qGtY8+nLky6t0bZ56cv0eblm230y7rp8XGlKe0m2YyG2RJmNrskRIgcrJ6RWsciKRCZRm6KpFGZSYJsaIuLM0xphEWNh2ZKRakVqLFtmiZjZUWPU2OnGzdNVRywZujSVj1HRCmOUqijFS17ZO9/StZerpWTgqcu+zGL/Z1+O02kOfU9T1mqxW+HTpJqkbLx4JKSZUfvDaTHJ15NvxjJRjjqunJlzanR5MqWv08zOnerjXxc7/qM2VyttnLKRU5GLfTn6rv45xb6SxbCcidXhS4RsOTM7E0jji+l2ZjTM3TY0TCyLGmGljRMLEulajSakUmyKNIIE1UZd6aJkUUimdaRkbQyP0+/wCjnQblai866ZTCMzFNsqPWPUerdOzu8X5+zkwY3kklE9Tx/Gca24jXiWuXzdSTHo+FilljTdJHZl8L8HjfltPb0jgh5MPHap3RpL+rzyx0WutV6N9jh9d+44c2KX45ZJOjx8sr77PU8zLKdpf8ADx8930x8ldv8eXPrPIYtFtiZhXbPiGItoVApDRk07N2Tf8AlSpV5wBhVmTqCLiiaLQ4mqSLolFJjRRSSdEumS7Asa7FKVGNjVgWNlIpJGKfw0gVEWN4JFOLg1z2RHhtGSf+RTKu7wnotvp2S8tJcZ5DypRpMn8to1neObrw+12u3Jlc5XYLJojlWTgPJ/axex/1/jeWd/s5sslLv0ycyXMm9NefHhtColdMHMlzM3U4lJk2FjxpcCxWMTYtTDYWZ2FhoxrYWZ2FhoxrYWZ2FhoxrYWZ2Fhox//2Q==");
+             background-attachment: fixed;
+             background-size: cover;
+             background-position: center;
+         }}
+         </style>
+         """,
+         unsafe_allow_html=True
+     )
 
 def dashboard_page():
-
     st.sidebar.title("Menu")
     page = st.sidebar.radio(
         "Navigation",
