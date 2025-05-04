@@ -13,19 +13,17 @@ API_URL = "https://api.ultramsg.com/instance116840/"
 
 def get_db_connection():
     try:
-        db = mysql.connector.connect(
-        host="your-remote-host.com",
-        user="remote_user",
-        password="remote_password",
-        database="your_database",
-        port=3306
-    )
-
-        cursor = db.cursor()
-        return db, cursor
+        conn = mysql.connector.connect(
+            host=st.secrets["mysql"]["host"],
+            user=st.secrets["mysql"]["user"],
+            password=st.secrets["mysql"]["password"],
+            database=st.secrets["mysql"]["database"],
+            port=st.secrets["mysql"].get("port", 3306)
+        )
+        return conn
     except Error as e:
-        st.error(f"Database connection failed: {e}")
-        st.stop()
+        st.error(f"Error connecting to the database: {e}")
+        return None
 
 def initialize_database():
     db, cursor = get_db_connection()
