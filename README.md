@@ -13,9 +13,12 @@ Note:- This platform is under-development, Currently available for testing purpo
 Developer:- 
 1. Sahil Rabani
    
-Github link:- github.com/sahil-rabani
-Contact:- sahilrabani3@gmail.com
-2. Rohan Shah
+   Github link:- github.com/sahil-rabani
+   
+   Contact:- sahilrabani3@gmail.com
+   
+3. Rohan Shah
 
-Github link:- github.com/
-Contact:- rohanshah9015115025@gmail.com
+   Github link:- github.com/
+   
+   Contact:- rohanshah9015115025@gmail.com
