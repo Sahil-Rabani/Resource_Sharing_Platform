@@ -13,7 +13,7 @@ Note:- This platform is under-development, Currently available for testing purpo
 Developer:- 
 1. Sahil Rabani
    Github link:- github.com/sahil-rabani
-   Contact no:- 9205571662
+   Contact:- sahilrabani3@gmail.com
 2. Rohan Shah
-   Github link:-
-   Contact no:- 9315318953
+   Github link:- github.com/
+   Contact:- rohanshah9015115025@gmail.com
