@@ -6,9 +6,9 @@ import datetime
 import bcrypt
 from sqlite3 import Error
 
-INSTANCE_ID = "instance:116840"
-TOKEN = "ke9cie56ll57nyo6"
-API_URL = "https://api.ultramsg.com/instance116840/"
+INSTANCE_ID = "instance118066"
+TOKEN = "k1nz8s6l6l5bc5fe"
+API_URL = "https://api.ultramsg.com/instance118066/"
 
 def get_db_connection():
     try:
