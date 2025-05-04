@@ -11,9 +11,9 @@ Helper Address.
 Note:- This platform is under-development, Currently available for testing purpose.
 
 Developer:- 
-1. Sahil Rabani
+1. Sahil Rabani\n
    Github link:- github.com/sahil-rabani
    Contact:- sahilrabani3@gmail.com
-2. Rohan Shah
+2. Rohan Shah\n
    Github link:- github.com/
    Contact:- rohanshah9015115025@gmail.com
