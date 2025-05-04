@@ -14,11 +14,13 @@ API_URL = "https://api.ultramsg.com/instance116840/"
 def get_db_connection():
     try:
         db = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password="Password@123",
-            database="work"
-        )
+        host="your-remote-host.com",
+        user="remote_user",
+        password="remote_password",
+        database="your_database",
+        port=3306
+    )
+
         cursor = db.cursor()
         return db, cursor
     except Error as e:
