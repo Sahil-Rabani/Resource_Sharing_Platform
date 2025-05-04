@@ -26,7 +26,10 @@ def get_db_connection():
         return None
 
 def initialize_database():
-    db, cursor = get_db_connection()
+    db = get_db_connection()
+    if db is None:
+        return
+    cursor = db.cursor()
     try:
         cursor.execute("SHOW TABLES LIKE 'users'")
         if not cursor.fetchone():
@@ -40,7 +43,6 @@ def initialize_database():
                 )
             """)
             db.commit()
-
         cursor.execute("SHOW TABLES LIKE 'help_requests'")
         if not cursor.fetchone():
             cursor.execute("""
@@ -61,6 +63,7 @@ def initialize_database():
     finally:
         cursor.close()
         db.close()
+
 
 initialize_database()
 
