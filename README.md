@@ -16,9 +16,3 @@ Developer:-
    Github link:- github.com/sahil-rabani
    
    Contact:- sahilrabani3@gmail.com
-   
-3. Rohan Shah
-
-   Github link:- github.com/rohanshah9315
-   
-   Contact:- rohanshah9015115025@gmail.com
