@@ -270,7 +270,7 @@ git push origin feature-name
 
 ---
 
-# 👨‍💻 Author
+# 👨‍💻 Developer
 
 **Sahil Rabani**
 
