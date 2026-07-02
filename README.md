@@ -1,4 +1,4 @@
-# 🏘️ Neighbor Help Connect
+# Resource Sharing Platform
 
 A community-based **Streamlit** application that allows people living in the same area to request and provide help to their neighbors. The application uses **SQLite** for data storage, **bcrypt** for secure password hashing, and **UltraMsg WhatsApp API** for OTP verification and notifications.
 
@@ -272,7 +272,7 @@ git push origin feature-name
 
 # 👨‍💻 Author
 
-**Your Name**
+**Sahil Rabani**
 
 GitHub: https://github.com/sahil-rabani
 
