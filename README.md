@@ -11,8 +11,14 @@ Helper Address.
 Note:- This platform is under-development, Currently available for testing purpose.
 
 Developer:- 
-   Sahil Rabani
+   Sahil Rabani[Back-End development]
    
    Github link:- github.com/sahil-rabani
    
    Contact:- sahilrabani3@gmail.com
+
+   Sahil Kumar[Front-End development]
+
+   Github link:- github.com/sahil-kumar999
+
+   contact:- sahil234324@gmail.com
