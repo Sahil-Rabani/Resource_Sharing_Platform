@@ -422,6 +422,7 @@ Resource Sharing Platform by Sahil Rabani — a community help platform built wi
 
 # **Ignore Tags**
 sahil-rabani
+Sahil-Rabani
 resource-sharing
 community-platform
 community-help
